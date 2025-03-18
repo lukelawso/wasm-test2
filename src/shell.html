@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAssembly Game</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #2c2c2c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            border: 2px solid #444;
+            background-color: black;
+            max-width: 100%;
+            max-height: 80vh;
+        }
+        .emscripten {
+            padding: 0;
+            margin: 0;
+        }
+        .spinner {
+            height: 50px;
+            width: 50px;
+            margin: 20px auto;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #status {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        #controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #output {
+            width: 800px;
+            max-width: 100%;
+            background-color: #111;
+            color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin-top: 20px;
+            height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="emscripten" id="status">Downloading...</div>
+    <div class="spinner" id="spinner"></div>
+    <div class="emscripten">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    </div>
+    <div id="controls">
+        <p>Use arrow keys to move the player</p>
+        <button onclick="document.getElementById('output').style.display = document.getElementById('output').style.display === 'none' ? 'block' : 'none'">
+            Toggle Console
+        </button>
+    </div>
+    <div id="output"></div>
+
+    <script>
+        var statusElement = document.getElementById('status');
+        var spinnerElement = document.getElementById('spinner');
+        var outputElement = document.getElementById('output');
+
+        var Module = {
+            preRun: [],
+            postRun: [],
+            print: (function() {
+                return function(text) {
+                    if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                    console.log(text);
+                    if (outputElement) {
+                        outputElement.innerHTML += text + "\n";
+                        outputElement.scrollTop = outputElement.scrollHeight;
+                    }
+                };
+            })(),
+            printErr: function(text) {
+                if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                console.error(text);
+                if (outputElement) {
+                    outputElement.innerHTML += '<span style="color: red;">' + text + "</span>\n";
+                    outputElement.scrollTop = outputElement.scrollHeight;
+                }
+            },
+            canvas: (function() {
+                var canvas = document.getElementById('canvas');
+                canvas.addEventListener("webglcontextlost", function(e) { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
+                return canvas;
+            })(),
+            setStatus: function(text) {
+                if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
+                if (text === Module.setStatus.last.text) return;
+                
+                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+                var now = Date.now();
+                if (m && now - Module.setStatus.last.time < 30) return; // If this is a progress update, skip it if too soon
+                
+                Module.setStatus.last.time = now;
+                Module.setStatus.last.text = text;
+                
+                if (m) {
+                    text = m[1];
+                    var progress = parseInt(m[2])*100 / parseInt(m[4]);
+                    spinnerElement.style.display = 'inline-block';
+                    statusElement.innerHTML = text + ' (' + Math.round(progress) + '%)';
+                } else {
+                    spinnerElement.style.display = 'none';
+                    statusElement.innerHTML = text;
+                }
+            },
+            totalDependencies: 0,
+            monitorRunDependencies: function(left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+            }
+        };
+        
+        Module.setStatus('Downloading...');
+        window.onerror = function(event) {
+            Module.setStatus('Exception thrown, see JavaScript console');
+            spinnerElement.style.display = 'none';
+            Module.setStatus = function(text) {
+                if (text) Module.printErr('[post-exception status] ' + text);
+            };
+        };
+    </script>
+    {{{ SCRIPT }}}
+</body>
+</html>

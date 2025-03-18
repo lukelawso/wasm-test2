@@ -1,0 +1,4 @@
+CompileFlags:
+  # Explicitly specify compilation database path
+  CompilationDatabase: build
+  
