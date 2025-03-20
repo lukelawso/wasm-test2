@@ -1,13 +1,22 @@
 // game.cpp - Main game file
 
+#ifdef WIN32
+#include <SDL.h>
+#include <SDL_pixels.h>
+#else
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_pixels.h>
-#include <emscripten.h>
-#include <emscripten/html5.h>
+#endif
+
 #include <memory>
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
 
 #include "entity.h"
 #include "shape.h"
@@ -25,12 +34,14 @@ SDL_Event g_event;
 const Uint8 *g_keystates = nullptr;
 bool g_quit = false;
 
-class Game {
+class Game
+{
   std::shared_ptr<PlayerObject> m_player;
   std::vector<std::shared_ptr<Entity>> m_entities;
 
 public:
-  Game() {
+  Game()
+  {
     SDL_Color color = {255, 0, 255};
     m_player = std::make_unique<PlayerObject>(c_screen_width / 2.0f - 25.0f,
                                               c_screen_height / 2.0f - 25.0f,
@@ -38,8 +49,10 @@ public:
     m_entities.push_back(m_player);
   }
 
-  void run_updates() {
-    for (auto &ent : m_entities) {
+  void run_updates()
+  {
+    for (auto &ent : m_entities)
+    {
       ent->update_object_pos();
     }
   }
@@ -50,9 +63,11 @@ public:
 };
 
 // Initialize the game
-bool init_globals() {
+bool init_globals()
+{
   // Initialize SDL
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO) < 0)
+  {
     printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
     return false;
   }
@@ -62,14 +77,16 @@ bool init_globals() {
                                SDL_WINDOWPOS_CENTERED, c_screen_width,
                                c_screen_height, SDL_WINDOW_SHOWN);
 
-  if (g_pWindow == nullptr) {
+  if (g_pWindow == nullptr)
+  {
     printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
     return false;
   }
 
   // Create renderer
   g_pRenderer = SDL_CreateRenderer(g_pWindow, -1, SDL_RENDERER_ACCELERATED);
-  if (g_pRenderer == nullptr) {
+  if (g_pRenderer == nullptr)
+  {
     printf("Renderer could not be created! SDL_Error: %s\n", SDL_GetError());
     return false;
   }
@@ -83,13 +100,19 @@ bool init_globals() {
 }
 
 // Process input
-void Game::process_input() {
+void Game::process_input()
+{
   // Process events
-  while (SDL_PollEvent(&g_event)) {
-    if (g_event.type == SDL_QUIT) {
+  while (SDL_PollEvent(&g_event))
+  {
+    if (g_event.type == SDL_QUIT)
+    {
       g_quit = true;
-    } else if (g_event.type == SDL_KEYDOWN) {
-      switch (g_event.key.keysym.sym) {
+    }
+    else if (g_event.type == SDL_KEYDOWN)
+    {
+      switch (g_event.key.keysym.sym)
+      {
       case SDLK_ESCAPE:
         g_quit = true;
         break;
@@ -101,28 +124,33 @@ void Game::process_input() {
 
   float x_vel = 0, y_vel = 0;
 
-  if (g_keystates[SDL_SCANCODE_LEFT] || g_keystates[SDL_SCANCODE_A]) {
+  if (g_keystates[SDL_SCANCODE_LEFT] || g_keystates[SDL_SCANCODE_A])
+  {
     x_vel = -5.0f;
   }
-  if (g_keystates[SDL_SCANCODE_RIGHT] || g_keystates[SDL_SCANCODE_D]) {
+  if (g_keystates[SDL_SCANCODE_RIGHT] || g_keystates[SDL_SCANCODE_D])
+  {
     x_vel = 5.0f;
   }
-  if (g_keystates[SDL_SCANCODE_UP] || g_keystates[SDL_SCANCODE_W]) {
+  if (g_keystates[SDL_SCANCODE_UP] || g_keystates[SDL_SCANCODE_W])
+  {
     y_vel = -5.0f;
   }
-  if (g_keystates[SDL_SCANCODE_DOWN] || g_keystates[SDL_SCANCODE_S]) {
+  if (g_keystates[SDL_SCANCODE_DOWN] || g_keystates[SDL_SCANCODE_S])
+  {
     y_vel = 5.0f;
   }
   m_player->set_velocity(x_vel, y_vel);
 }
 
 // Render game
-void Game::render() {
+void Game::render()
+{
   // Clear screen
   SDL_SetRenderDrawColor(g_pRenderer, 0, 0, 0, 255);
   SDL_RenderClear(g_pRenderer);
 
-  // TODO: render other entities minus player
+  // TODO: render other entities then player
 
   m_player->draw();
 
@@ -131,11 +159,15 @@ void Game::render() {
 }
 
 // Main game loop
-void main_loop(void *pGame) {
-  if (g_quit) {
+void main_loop(void *pGame)
+{
+#ifdef __EMSCRIPTEN__
+  if (g_quit)
+  {
     emscripten_cancel_main_loop();
     return;
   }
+#endif // __EMSCRIPTEN__
   Game &game = *static_cast<Game *>(pGame);
 
   game.process_input();
@@ -144,25 +176,35 @@ void main_loop(void *pGame) {
 }
 
 // Clean up resources
-void close() {
+void close()
+{
   SDL_DestroyRenderer(g_pRenderer);
   SDL_DestroyWindow(g_pWindow);
   SDL_Quit();
 }
 
 // Main function
-int main(int argc, char *args[]) {
+int main(int argc, char *args[])
+{
   // Initialize game
-  if (!init_globals()) {
+  if (!init_globals())
+  {
     printf("Failed to initialize!\n");
     return -1;
   }
 
   Game game{};
 
+#ifdef __EMSCRIPTEN__
   // Set main loop
   // 0 fps means using requestAnimationFrame, -1 means synchronous
   emscripten_set_main_loop_arg(main_loop, &game, 0, 1);
+#else
+  while (!g_quit)
+  {
+    main_loop(&game);
+  }
+#endif // __EMSCRIPTEN__
 
   // Clean up (this will not actually be called in Emscripten)
   close();
